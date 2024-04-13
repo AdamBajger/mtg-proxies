@@ -11,7 +11,7 @@ import pytest
     ],
 )
 def test_get_faces(id: str, n_faces: int):
-    import scryfall
+    from mtgproxies import scryfall
 
     card = scryfall.card_by_id()[id]
     faces = scryfall.get_faces(card)
@@ -32,7 +32,7 @@ def test_get_faces(id: str, n_faces: int):
     ],
 )
 def test_canonic_card_name(name: str, expected_id: str):
-    import scryfall
+    from mtgproxies import scryfall
 
     card = scryfall.get_card(name)
 

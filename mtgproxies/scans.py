@@ -4,7 +4,7 @@ from typing import Literal
 
 from tqdm import tqdm
 
-import scryfall
+from mtgproxies import scryfall
 from mtgproxies.decklists.decklist import Decklist
 
 

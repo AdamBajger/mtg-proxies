@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-import scryfall
+from mtgproxies import scryfall
 from mtgproxies.format import format_print, format_token, listing
 
 

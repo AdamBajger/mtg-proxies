@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import scryfall
+from mtgproxies import scryfall
 from mtgproxies.decklists.sanitizing import validate_card_name, validate_print
 
 
@@ -152,7 +152,7 @@ def parse_decklist_stream(stream) -> tuple[Decklist, bool, list]:
     warnings = []
     ok = True
     for line in stream:
-        m = re.search(r"([0-9]+)\s+(.+?)(?:\s+\((\S*)\)\s+(\S+))?\s*$", line)
+        m = re.search(r"([0-9]+)x?\s+(.+?)(?:\s+\((\S*)\)\s+(\S+))?\s*$", line)
         if m:
             # Extract relevant data
             count = int(m.group(1))
