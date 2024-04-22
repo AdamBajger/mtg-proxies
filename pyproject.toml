@@ -7,7 +7,7 @@ dependencies = [
     "requests",
     "tqdm",
     "fpdf2>=2.3.0",
-
+    "nptyping>=2.5.0",
 ]
 requires-python = ">=3.9"
 classifiers = [  # Optional
@@ -44,6 +44,7 @@ include = ["mtgproxies", "scryfall"]
 line-length = 120
 target-version = ['py39', 'py310', 'py311', 'py312']
 
+[tool.pdm]
 [build-system]
 requires = ["setuptools >= 61.0"]
 build-backend = "setuptools.build_meta"
