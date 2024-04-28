@@ -1,3 +1,6 @@
+import tempfile
+from pathlib import Path
+
 import pytest
 
 
@@ -33,7 +36,12 @@ def test_get_faces(id: str, n_faces: int):
 )
 def test_canonic_card_name(name: str, expected_id: str):
     from mtgproxies import scryfall
+    with tempfile.TemporaryDirectory(dir="test_cache") as tmpdir:
+        cache_dir = Path(tmpdir)
+        cache_dir.mkdir(exist_ok=False)
 
-    card = scryfall.get_card(name)
+
+
+    card = scryfall.get_card(name, cache_dir=cache_dir)
 
     assert card["id"] == expected_id

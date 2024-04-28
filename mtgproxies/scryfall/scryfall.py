@@ -9,7 +9,7 @@ import threading
 from collections import defaultdict
 from functools import lru_cache
 from pathlib import Path
-from tempfile import gettempdir
+import logging
 
 import numpy as np
 import requests
@@ -17,13 +17,16 @@ from tqdm import tqdm
 
 from mtgproxies.scryfall.rate_limit import RateLimiter
 
-cache = Path(gettempdir()) / "scryfall_cache"
-cache.mkdir(parents=True, exist_ok=True)  # Create cache folder
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_CACHE_DIR = Path.home() / ".cache" / "mtgproxies" / "scryfall"
+# cache.mkdir(parents=True, exist_ok=True)  # Create cache folder
 scryfall_rate_limiter = RateLimiter(delay=0.1)
 _download_lock = threading.Lock()
 
 
-def get_image(image_uri: str, silent: bool = False) -> str:
+def get_image(image_uri: str, cache_dir: Path, silent: bool = False) -> str:
     """Download card artwork and return the path to a local copy.
 
     Uses cache and Scryfall API call rate limit.
@@ -33,10 +36,11 @@ def get_image(image_uri: str, silent: bool = False) -> str:
     """
     split = image_uri.split("/")
     file_name = split[-5] + "_" + split[-4] + "_" + split[-1].split("?")[0]
-    return get_file(file_name, image_uri, silent=silent)
+    logger.debug(f"Downloading {file_name} from {image_uri}")
+    return get_file(file_name, image_uri, cache_dir=cache_dir, silent=silent)
 
 
-def get_file(file_name: str, url: str, silent: bool = False) -> str:
+def get_file(file_name: str, url: str, cache_dir: Path, silent: bool = False) -> str:
     """Download a file and return the path to a local copy.
 
     Uses cache and Scryfall API call rate limit.
@@ -44,7 +48,7 @@ def get_file(file_name: str, url: str, silent: bool = False) -> str:
     Returns:
         string: Path to local file.
     """
-    file_path = cache / file_name
+    file_path = cache_dir / file_name
     with _download_lock:
         if not file_path.is_file():
             if "api.scryfall.com" in url:  # Apply rate limit
@@ -75,9 +79,9 @@ def download(url: str, dst, chunk_size: int = 1024 * 4, silent: bool = False):
 
 
 def depaginate(url: str) -> list[dict]:
-    """Depaginates Scryfall search results.
+    """Recursively unpack Scryfall search results from multiple pages into a single list.
 
-    Uses cache and Scryfall API call rate limit.
+    Uses Scryfall API call rate limit to avoid excessive requests.
 
     Returns:
         list: Concatenation of all `data` entries.
@@ -108,13 +112,13 @@ def search(q: str) -> list[dict]:
 
 
 @lru_cache(maxsize=None)
-def _get_database(database_name: str = "default_cards"):
+def _get_database(cache_dir: Path, database_name: str = "default_cards"):
     databases = depaginate("https://api.scryfall.com/bulk-data")
     bulk_data = [database for database in databases if database["type"] == database_name]
     if len(bulk_data) != 1:
         raise ValueError(f"Unknown database {database_name}")
 
-    bulk_file = get_file(bulk_data[0]["download_uri"].split("/")[-1], bulk_data[0]["download_uri"])
+    bulk_file = get_file(bulk_data[0]["download_uri"].split("/")[-1], bulk_data[0]["download_uri"], cache_dir=cache_dir)
     with open(bulk_file, encoding="utf-8") as json_file:
         return json.load(json_file)
 
@@ -129,37 +133,40 @@ def canonic_card_name(card_name: str) -> str:
     return card_name
 
 
-def get_card(card_name: str, set_id: str = None, collector_number: str = None) -> dict | None:
+def get_card(card_name: str, cache_dir: Path, set_id: str = None, collector_number: str = None) -> dict | None:
     """Find a card by it's name and possibly set and collector number.
 
     In case, the Scryfall database contains multiple cards, the first is returned.
 
     Args:
         card_name: Exact English card name
+        cache_dir: Path to cache directory
         set_id: Shorthand set name
         collector_number: Collector number, may be a string for e.g. promo suffixes
 
     Returns:
         card: Dictionary of card, or `None` if not found.
     """
-    cards = get_cards(name=card_name, set=set_id, collector_number=collector_number)
+    cards = get_cards(name=card_name, set=set_id, collector_number=collector_number, cache_dir=cache_dir)
 
     return cards[0] if len(cards) > 0 else None
 
 
-def get_cards(database: str = "default_cards", **kwargs):
+def get_cards(cache_dir: Path, database: str = "default_cards", **kwargs):
     """Get all cards matching certain attributes.
 
-    Matching is case insensitive.
+    Matching is case-insensitive.
 
     Args:
+        cache_dir: Path to cache directory
+        database: Name of the database to use
         kwargs: (key, value) pairs, e.g. `name="Tendershoot Dryad", set="RIX"`.
                 keys with a `None` value are ignored
 
     Returns:
         List of all matching cards
     """
-    cards = _get_database(database)
+    cards = _get_database(cache_dir=cache_dir, database_name=database)
 
     for key, value in kwargs.items():
         if value is not None:
@@ -187,7 +194,8 @@ def get_faces(card):
         raise ValueError(f"Unknown layout {card['layout']}")
 
 
-def recommend_print(current=None, card_name: str | None = None, oracle_id: str | None = None, mode="best"):
+def recommend_print(cache_dir: Path, current=None, card_name: str | None = None, oracle_id: str | None = None,
+                    mode="best"):
     if current is not None and oracle_id is None:  # Use oracle id of current
         if current.get("layout") == "reversible_card":
             # Reversible cards have the same oracle id for both faces
@@ -196,9 +204,9 @@ def recommend_print(current=None, card_name: str | None = None, oracle_id: str |
             oracle_id = current["oracle_id"]
 
     if oracle_id is not None:
-        alternatives = cards_by_oracle_id()[oracle_id]
+        alternatives = get_cards_by_oracle_id(cache_dir=cache_dir)[oracle_id]
     else:
-        alternatives = get_cards(name=card_name)
+        alternatives = get_cards(name=card_name, cache_dir=cache_dir)
 
     def score(card: dict):
         points = 0
@@ -267,7 +275,7 @@ def recommend_print(current=None, card_name: str | None = None, oracle_id: str |
 
 
 @lru_cache(maxsize=None)
-def card_by_id():
+def card_by_id(cache_dir: Path):
     """Create dictionary to look up cards by their id.
 
     Faster than repeated lookup via get_cards().
@@ -275,11 +283,11 @@ def card_by_id():
     Returns:
         dict {id: card}
     """
-    return {c["id"]: c for c in get_cards()}
+    return {c["id"]: c for c in get_cards(cache_dir=cache_dir)}
 
 
 @lru_cache(maxsize=None)
-def cards_by_oracle_id():
+def get_cards_by_oracle_id(cache_dir: Path):
     """Create dictionary to look up cards by their oracle id.
 
     Faster than repeated lookup via get_cards().
@@ -288,7 +296,7 @@ def cards_by_oracle_id():
         dict {id: [cards]}
     """
     cards_by_oracle_id = defaultdict(list)
-    for c in get_cards():
+    for c in get_cards(cache_dir=cache_dir):
         if "oracle_id" in c:  # Not all cards have a oracle id, *sigh*
             cards_by_oracle_id[c["oracle_id"]].append(c)
         elif "card_faces" in c and "oracle_id" in c["card_faces"][0]:
@@ -297,7 +305,7 @@ def cards_by_oracle_id():
 
 
 @lru_cache(maxsize=None)
-def oracle_ids_by_name() -> dict[str, list[dict]]:
+def get_oracle_ids_by_name(cache_dir: Path) -> dict[str, list[dict]]:
     """Create dictionary to look up oracle ids by their name.
 
     Faster than repeated lookup via `get_cards(oracle_id=oracle_id)`.
@@ -308,7 +316,7 @@ def oracle_ids_by_name() -> dict[str, list[dict]]:
         dict {name: [oracle_ids]}
     """
     oracle_ids_by_name = defaultdict(set)
-    for oracle_id, cards in cards_by_oracle_id().items():
+    for oracle_id, cards in get_cards_by_oracle_id(cache_dir=cache_dir).items():
         card = cards[0]
         if card["layout"] in ["art_series"]:  # Skip art series, as they have double faced names
             continue
@@ -323,15 +331,16 @@ def oracle_ids_by_name() -> dict[str, list[dict]]:
     return oracle_ids_by_name
 
 
-def get_price(oracle_id: str, currency: str = "eur", foil: bool = None) -> float | None:
-    """Find lowest price for oracle id.
+def get_price(cache_dir: Path, oracle_id: str, currency: str = "eur", foil: bool = None) -> float | None:
+    """Find the lowest price for oracle id.
 
     Args:
+        cache_dir: Path to cache directory
         oracle_id: oracle_id of card
         currency: `usd`, `eur` or `tix`
         foil: `False`, `True`, or `None` for any
     """
-    cards = cards_by_oracle_id()[oracle_id]
+    cards = get_cards_by_oracle_id(cache_dir=cache_dir)[oracle_id]
 
     slots = []
     if not foil:
@@ -342,7 +351,7 @@ def get_price(oracle_id: str, currency: str = "eur", foil: bool = None) -> float
     prices = [float(c["prices"][slot]) for c in cards for slot in slots if c["prices"][slot] is not None]
 
     if len(prices) == 0 and currency == "eur":  # Try dollar and apply conversion
-        usd = get_price(oracle_id, "usd")
+        usd = get_price(cache_dir=cache_dir, oracle_id=oracle_id, currency="usd")
         return 0.83 * usd if usd is not None else None
 
     return min(prices) if len(prices) > 0 else None

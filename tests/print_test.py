@@ -1,3 +1,4 @@
+import math
 from pathlib import Path
 
 import pytest
@@ -44,3 +45,23 @@ def test_print_cards_matplotlib_png(example_images: list[str], tmp_path: Path):
     print_cards_matplotlib(example_images, out_file)
 
     assert (tmp_path / "decklist_000.png").is_file()
+
+
+def test_dimension_units_coverage():
+    from mtgproxies.dimensions import Units, PAPER_SIZE
+
+    for unit in Units.__args__:
+        for spec in PAPER_SIZE:
+            assert unit in PAPER_SIZE[spec]
+
+def test_units_conversion_to_mm():
+    from mtgproxies.dimensions import UNITS_TO_MM
+
+    assert math.isclose(6 * UNITS_TO_MM["in"], 152.4, rel_tol=1e-3)
+    assert math.isclose(6 * UNITS_TO_MM["cm"], 60, rel_tol=1e-3)
+    assert math.isclose(6 * UNITS_TO_MM["mm"], 6, rel_tol=1e-3)
+
+    assert math.isclose(152.4 / UNITS_TO_MM["in"], 6, rel_tol=1e-3)
+    assert math.isclose(60 / UNITS_TO_MM["cm"], 6, rel_tol=1e-3)
+    assert math.isclose(6 / UNITS_TO_MM["mm"], 6, rel_tol=1e-3)
+

@@ -15,6 +15,7 @@ from mtgproxies.dimensions import (
     MTG_CARD_MM, Units, UNITS_TO_MM
 )
 from mtgproxies.print_cards import FPDF2CardAssembler
+from mtgproxies.scryfall.scryfall import DEFAULT_CACHE_DIR
 
 
 def papersize(string: str) -> np.ndarray:
@@ -110,7 +111,7 @@ def common_cli_arguments(func):
     func = click.option(
         "--cache-dir", "-cd",
         type=click.Path(path_type=Path, file_okay=False, dir_okay=True, writable=True),
-        default=Path.cwd() / ".cache" / "mtgproxies",
+        default=DEFAULT_CACHE_DIR,
         help="Directory to store cached card images."
     )(func)
     return func
@@ -147,7 +148,9 @@ def my_mom(
         parsed_deck_list.extend(parse_decklist_spec(deck))
 
     # Fetch scans
-    images = fetch_scans_scryfall(decklist=parsed_deck_list, faces=faces)
+    if not cache_dir.exists():
+        cache_dir.mkdir(parents=True)
+    images = fetch_scans_scryfall(decklist=parsed_deck_list, faces=faces, cache_dir=cache_dir)
 
     # resolve paper size
     if isinstance(paper_size, str):
