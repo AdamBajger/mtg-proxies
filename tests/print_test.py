@@ -5,11 +5,11 @@ import pytest
 
 
 @pytest.fixture(scope="module")
-def example_images() -> list[str]:
+def example_images(cache_dir) -> list[str]:
     from mtgproxies import fetch_scans_scryfall
     from mtgproxies.decklists import parse_decklist
 
-    decklist, _, _ = parse_decklist(Path(__file__).parent.parent / "examples/decklist.txt")
+    decklist, _, _ = parse_decklist(Path(__file__).parent.parent / "examples/decklist.txt", cache_dir=cache_dir)
     images = fetch_scans_scryfall(decklist)
 
     return images
@@ -54,14 +54,18 @@ def test_dimension_units_coverage():
         for spec in PAPER_SIZE:
             assert unit in PAPER_SIZE[spec]
 
-def test_units_conversion_to_mm():
+
+@pytest.mark.parametrize(
+    "unit,amount,expected_mm",
+    [
+        ("in", 6, 152.4),
+        ("cm", 6, 60),
+        ("mm", 6, 6),
+    ],
+)
+def test_units_to_mm(unit: str, amount: float, expected_mm: float):
     from mtgproxies.dimensions import UNITS_TO_MM
+    assert math.isclose(amount * UNITS_TO_MM[unit], expected_mm, rel_tol=1e-3)
+    assert math.isclose(expected_mm / UNITS_TO_MM[unit], amount, rel_tol=1e-3)
 
-    assert math.isclose(6 * UNITS_TO_MM["in"], 152.4, rel_tol=1e-3)
-    assert math.isclose(6 * UNITS_TO_MM["cm"], 60, rel_tol=1e-3)
-    assert math.isclose(6 * UNITS_TO_MM["mm"], 6, rel_tol=1e-3)
-
-    assert math.isclose(152.4 / UNITS_TO_MM["in"], 6, rel_tol=1e-3)
-    assert math.isclose(60 / UNITS_TO_MM["cm"], 6, rel_tol=1e-3)
-    assert math.isclose(6 / UNITS_TO_MM["mm"], 6, rel_tol=1e-3)
 

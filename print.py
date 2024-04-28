@@ -143,13 +143,15 @@ def my_mom(
     OUTPUT_FILE is the path to the output PDF file.
 
     """
-    parsed_deck_list = Decklist()
-    for deck in deck_list:
-        parsed_deck_list.extend(parse_decklist_spec(deck))
-
-    # Fetch scans
     if not cache_dir.exists():
         cache_dir.mkdir(parents=True)
+    print("CACHE:", cache_dir.absolute().as_posix())
+
+    parsed_deck_list = Decklist()
+    for deck in deck_list:
+        parsed_deck_list.extend(parse_decklist_spec(deck, cache_dir=cache_dir))
+
+    # Fetch scans
     images = fetch_scans_scryfall(decklist=parsed_deck_list, faces=faces, cache_dir=cache_dir)
 
     # resolve paper size
