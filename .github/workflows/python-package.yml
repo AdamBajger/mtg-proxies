@@ -27,7 +27,7 @@ jobs:
         uses: pdm-project/setup-pdm@v4
         # You are now able to use PDM in your workflow
       - name: Install packages
-        run: pdm install -d --skip=post_install
+        run: pdm install -G test --skip=post_install
       - name: Test with pytest
         run: |
           python -m pytest tests/

@@ -41,10 +41,30 @@ Homepage = "https://github.com/DiddiZ/mtg-proxies"
 [tool.setuptools.packages.find]
 include = ["mtgproxies", "scryfall"]
 
+
+
 [tool.pdm]
 [tool.pdm.dev-dependencies]
-dev = ["mypy", "pre-commit", "ruff"]
-test = ["pytest", "pytest-cov"]
+dev = [
+    "mypy",
+    "pre-commit",
+    "ruff",
+]
+test = [
+    "pytest>=8.2.0",
+    "pytest-cov",
+]
+
+[tool.pdm.scripts]
+l = { composite = ["lint", "format", "mypy"] }
+test = "pytest tests"
+lint = "ruff check ."
+format = "ruff format ."
+mypy = "mypy ."
+post_install = { composite = [
+    "pre-commit install",
+    "pre-commit install --hook-type commit-msg",
+] }
 
 [build-system]
 requires = ["setuptools >= 61.0"]
@@ -70,17 +90,6 @@ extend-ignore = [
     "D107",   # missing docstring in __init__
 ]
 
-
-[tool.pdm.scripts]
-l = { composite = ["lint", "format", "mypy"] }
-test = "pytest tests"
-lint = "ruff check ."
-format = "ruff format ."
-mypy = "mypy ."
-post_install = { composite = [
-    "pre-commit install",
-    "pre-commit install --hook-type commit-msg",
-] }
 
 [tool.ruff.format]
 # Enable reformatting of code snippets in docstrings.
