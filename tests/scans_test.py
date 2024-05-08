@@ -7,10 +7,10 @@ from mtgproxies.decklists import Decklist
 
 
 @pytest.fixture(scope="module")
-def example_decklist(cache_dir: Path) -> Decklist:
+def example_decklist(cache_dir: Path, example_decklists_dir: Path) -> Decklist:
     from mtgproxies.decklists import parse_decklist
 
-    decklist, _, _ = parse_decklist(Path("resources") / "decklists" / "decklist.txt", cache_dir=cache_dir)
+    decklist, _, _ = parse_decklist(example_decklists_dir / "decklist.txt", cache_dir=cache_dir)
 
     return decklist
 
@@ -24,10 +24,7 @@ def example_decklist(cache_dir: Path) -> Decklist:
     ],
 )
 def test_fetch_scans_scryfall(
-        example_decklist: Decklist,
-        faces: Literal["all", "front", "back"],
-        expected_images: int,
-        cache_dir: Path
+    example_decklist: Decklist, faces: Literal["all", "front", "back"], expected_images: int, cache_dir: Path
 ):
     from mtgproxies import fetch_scans_scryfall
 
