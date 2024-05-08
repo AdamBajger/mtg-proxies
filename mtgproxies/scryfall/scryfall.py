@@ -26,7 +26,7 @@ scryfall_rate_limiter = RateLimiter(delay=0.1)
 _download_lock = threading.Lock()
 
 
-def get_image(image_uri: str, cache_dir: Path, silent: bool = False) -> str:
+def get_image(image_uri: str, cache_dir: Path, silent: bool = False) -> Path:
     """Download card artwork and return the path to a local copy.
 
     Uses cache and Scryfall API call rate limit.
@@ -40,7 +40,7 @@ def get_image(image_uri: str, cache_dir: Path, silent: bool = False) -> str:
     return get_file(file_name, image_uri, cache_dir=cache_dir, silent=silent)
 
 
-def get_file(file_name: str, url: str, cache_dir: Path, silent: bool = False) -> str:
+def get_file(file_name: str, url: str, cache_dir: Path, silent: bool = False) -> Path:
     """Download a file and return the path to a local copy.
 
     Uses cache and Scryfall API call rate limit.
@@ -57,7 +57,7 @@ def get_file(file_name: str, url: str, cache_dir: Path, silent: bool = False) ->
             else:
                 download(url, file_path, silent=silent)
 
-    return str(file_path)
+    return file_path
 
 
 def download(url: str, dst, chunk_size: int = 1024 * 4, silent: bool = False):

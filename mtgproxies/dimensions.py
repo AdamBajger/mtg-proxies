@@ -1,22 +1,24 @@
-import logging
 from logging import getLogger
 
-from typing import Any, TypeVar, Literal
+from typing import Literal
 from collections.abc import Iterable
 
 import numpy as np
-from nptyping import NDArray, Float, Int
+from nptyping import NDArray, Float
 from nptyping.shape import Shape
-
-import sys
 
 
 logger = getLogger(__name__)
 
 
 # TODO: Implement using pint
-MTG_CARD_INCHES: NDArray[Shape["2"], Float] = np.asarray([2.48425197, 3.46456693], dtype=float)
-MTG_CARD_MM: NDArray[Shape["2"], Float] = np.asarray([63.1, 88.0], dtype=float)
+# MTG_CARD_INCHES: NDArray[Shape["2"], Float] = np.asarray([2.48425197, 3.46456693], dtype=float)
+# MTG_CARD_MM: NDArray[Shape["2"], Float] = np.asarray([63.1, 88.0], dtype=float)
+MTG_CARD_SIZE: dict[str, NDArray[Shape["2"], Float]] = {
+    "in": np.asarray([2.48425197, 3.46456693], dtype=float),
+    "mm": np.asarray([63.1, 88.0], dtype=float),
+    "cm": np.asarray([6.31, 8.8], dtype=float),
+}
 
 # Paper sizes (sourced from the Adobe website)
 PAPER_SIZE: dict[str, dict[str, NDArray[Shape["2"], Float]]] = {
@@ -95,7 +97,7 @@ Units = Literal["in", "mm", "cm"]
 
 def get_pixels_from_size_and_ppsu(
         ppsu: int,
-        size: Iterable[float] | float = MTG_CARD_INCHES
+        size: Iterable[float] | float
 ) -> Iterable[int]:
     """Calculate size in pixels from size and DPI.
 
@@ -129,7 +131,7 @@ def get_ppsu_from_size_and_pixels(
     ppsu = np.asarray(pixel_values, dtype=np.int32) / (np.asarray(size, dtype=np.float32))
     mean_ppsu = np.mean(ppsu)
     if not np.allclose(ppsu, mean_ppsu, atol=1):
-        logger.warning(f"DPIs differ accross dimensions: {ppsu}")
+        logger.warning(f"DPIs differ accross dimensions: {ppsu} = {pixel_values}/{size}")
     return int(mean_ppsu.round(decimals=0))
 
 

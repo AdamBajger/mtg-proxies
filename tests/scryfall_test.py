@@ -16,7 +16,7 @@ import pytest
 def test_get_faces(mtgjson_id: str, n_faces: int, cache_dir: Path):
     from mtgproxies import scryfall
 
-    card = scryfall.card_by_id(cache_dir=cache_dir)[id]
+    card = scryfall.card_by_id(cache_dir=cache_dir)[mtgjson_id]
     faces = scryfall.get_faces(card)
 
     assert type(faces) is list
@@ -34,11 +34,8 @@ def test_get_faces(mtgjson_id: str, n_faces: int, cache_dir: Path):
         ("vedalken æthermage", "496eb37d-5c8f-4dd7-a0a7-3ed1bd2210d6"),
     ],
 )
-def test_canonic_card_name(name: str, expected_id: str):
+def test_canonic_card_name(name: str, expected_id: str, cache_dir: Path):
     from mtgproxies import scryfall
-    with tempfile.TemporaryDirectory(dir="test_cache") as tmpdir:
-        cache_dir = Path(tmpdir)
-        cache_dir.mkdir(exist_ok=False)
 
     card = scryfall.get_card(name, cache_dir=cache_dir)
 

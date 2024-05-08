@@ -9,11 +9,8 @@ from mtgproxies import scryfall
 from mtgproxies.decklists.decklist import Decklist
 
 
-def fetch_scans_scryfall(
-        decklist: Decklist,
-        faces: Literal["all", "front", "back"] = "all",
-        cache_dir: Path = Path("."),
-) -> list[str]:
+def fetch_scans_scryfall(decklist: Decklist, cache_dir: Path,
+                         faces: Literal["all", "front", "back"] = "all") -> list[Path]:
     """Search Scryfall for scans of a decklist.
 
     Args:
