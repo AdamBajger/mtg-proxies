@@ -1,18 +1,15 @@
-import argparse
 from pathlib import Path
-from typing import IO, TextIO, Literal, Any
+from typing import Literal
 
 import click
 import numpy as np
-from nptyping import NDArray, Shape, Float32
-from webcolors import name_to_rgb, IntegerRGB
+from nptyping import Float32, NDArray, Shape
+from webcolors import IntegerRGB, name_to_rgb
 
-from mtgproxies import fetch_scans_scryfall, print_cards_matplotlib
+from mtgproxies import fetch_scans_scryfall
 from mtgproxies.cli import parse_decklist_spec
 from mtgproxies.decklists import Decklist
-from mtgproxies.dimensions import (
-    PAPER_SIZE, Units, UNITS_TO_MM, MTG_CARD_SIZE
-)
+from mtgproxies.dimensions import MTG_CARD_SIZE, PAPER_SIZE, UNITS_TO_MM, Units
 from mtgproxies.print_cards import FPDF2CardAssembler, MatplotlibCardAssembler
 from mtgproxies.scryfall.scryfall import DEFAULT_CACHE_DIR
 
@@ -26,10 +23,9 @@ from mtgproxies.scryfall.scryfall import DEFAULT_CACHE_DIR
 #         return np.array([float(split[0]), float(split[1])])
 #     raise argparse.ArgumentTypeError()
 
+
 def click_callback_cardsize(
-        ctx: click.Context,
-        param: click.Parameter,
-        value: str
+    ctx: click.Context, param: click.Parameter, value: str
 ) -> NDArray[Shape["2"], Float32] | None:
     if value is None:
         return None
@@ -41,9 +37,7 @@ def click_callback_cardsize(
 
 
 def click_callback_papersize(
-        ctx: click.Context,
-        param: click.Parameter,
-        value: str
+    ctx: click.Context, param: click.Parameter, value: str
 ) -> str | NDArray[Shape["2"], Float32]:
     spec = value.upper()
     if spec in PAPER_SIZE:
@@ -51,22 +45,20 @@ def click_callback_papersize(
     elif "x" in spec:
         split = spec.split("x")
         if len(split) == 2:
-            return np.asarray([float(split[0]), float(split[1])] , dtype=float)
+            return np.asarray([float(split[0]), float(split[1])], dtype=float)
         else:
-            raise click.BadParameter(
-                "Paper size must be in the format WIDTHxHEIGHT", param=param, ctx=ctx)
+            raise click.BadParameter("Paper size must be in the format WIDTHxHEIGHT", param=param, ctx=ctx)
 
     else:
         raise click.BadParameter(
             f"Paper size not supported: {spec}. Try one of: {', '.join(PAPER_SIZE.keys())}, "
-            f"or define the dimensions in a WIDTHxHEIGHT format", param=param, ctx=ctx)
+            f"or define the dimensions in a WIDTHxHEIGHT format",
+            param=param,
+            ctx=ctx,
+        )
 
 
-def click_callback_cache_dir(
-        ctx: click.Context,
-        param: click.Parameter,
-        value: Path
-) -> Path:
+def click_callback_cache_dir(ctx: click.Context, param: click.Parameter, value: Path) -> Path:
     assert isinstance(value, Path)
     if not value.exists():
         value.mkdir(parents=True)
@@ -80,70 +72,84 @@ def ur_mom(ctx):
 
 
 def common_cli_arguments(func):
-    func = click.argument(
-        "output_file",
-        type=click.Path(path_type=Path, exists=False, writable=True),
-        required=True
-    )(func)
+    func = click.argument("output_file", type=click.Path(path_type=Path, exists=False, writable=True), required=True)(
+        func
+    )
     func = click.argument("deck_list", type=str, nargs=-1)(func)
     func = click.option(
-        "--crop-mark-thickness", "-cm",
-        type=float, default=0.0,
+        "--crop-mark-thickness",
+        "-cm",
+        type=float,
+        default=0.0,
         help="Thickness of crop marks in the specified units. Use 0 to disable crop marks.",
     )(func)
     func = click.option(
-        "--cut-lines-thickness", "-cl",
-        type=float, default=0.0,
-        help="Thickness of cut lines in the specified units. Use 0 to disable cut lines."
+        "--cut-lines-thickness",
+        "-cl",
+        type=float,
+        default=0.0,
+        help="Thickness of cut lines in the specified units. Use 0 to disable cut lines.",
     )(func)
     func = click.option(
-        "--crop-border", "-cb",
-        type=float, default=0.0,
-        help="How much to crop the borders of the cards in the specified units."
+        "--crop-border",
+        "-cb",
+        type=float,
+        default=0.0,
+        help="How much to crop the borders of the cards in the specified units.",
     )(func)
     func = click.option(
-        "--background-color", "-bg",
-        type=name_to_rgb, default=None,
-        help="Background color of the cards, either by name or by hex code."
+        "--background-color",
+        "-bg",
+        type=name_to_rgb,
+        default=None,
+        help="Background color of the cards, either by name or by hex code.",
     )(func)
     func = click.option(
-        "--paper-size", "-ps",
-        type=str, default="a4", callback=click_callback_papersize,
-        help="Paper size keyword (A0 - A10) or dimensions in the format WIDTHxHEIGHT."
+        "--paper-size",
+        "-ps",
+        type=str,
+        default="a4",
+        callback=click_callback_papersize,
+        help="Paper size keyword (A0 - A10) or dimensions in the format WIDTHxHEIGHT.",
     )(func)
     func = click.option(
-        "--page-safe-margin", "-m",
-        type=float, default=0.0,
-        help="Margin around the area where no cards will be printed. Useful for printers that can't print to the edge."
+        "--page-safe-margin",
+        "-m",
+        type=float,
+        default=0.0,
+        help="Margin around the area where no cards will be printed. Useful for printers that can't print to the edge.",
     )(func)
     func = click.option(
-        "--faces", "-f",
-        type=click.Choice(["all", "front", "back"]), default="all",
-        help="Which faces to print."
+        "--faces", "-f", type=click.Choice(["all", "front", "back"]), default="all", help="Which faces to print."
     )(func)
     func = click.option(
-        "--units", "-u",
-        type=click.Choice(Units.__args__), default="mm",
-        help="Units of the specified dimensions. Default is mm."
+        "--units",
+        "-u",
+        type=click.Choice(Units.__args__),
+        default="mm",
+        help="Units of the specified dimensions. Default is mm.",
     )(func)
     func = click.option(
-        "--fill-corners", "-fc",
+        "--fill-corners",
+        "-fc",
         is_flag=True,
-        help="Fill the corners of the cards with the colors of the closest pixels."
+        help="Fill the corners of the cards with the colors of the closest pixels.",
     )(func)
     func = click.option(
-        "--cache-dir", "-cd",
+        "--cache-dir",
+        "-cd",
         type=click.Path(path_type=Path, file_okay=False, dir_okay=True, writable=True),
         default=DEFAULT_CACHE_DIR,
         callback=click_callback_cache_dir,
-        help="Directory to store cached card images."
+        help="Directory to store cached card images.",
     )(func)
     func = click.option(
-        "--card-size", "-cs",
+        "--card-size",
+        "-cs",
         default=None,
         help="Size of the cards in the format WIDTHxHEIGHT in the units specified by user. "
-             "Default is 2.5x3.5 inches (or 63.1x88 mm).",
-        callback=click_callback_cardsize
+        "Default is 2.5x3.5 inches (or 63.1x88 mm).",
+        callback=click_callback_cardsize,
     )(func)
     return func
 
@@ -151,21 +157,21 @@ def common_cli_arguments(func):
 @ur_mom.command(name="pdf")
 @common_cli_arguments
 def my_mom(
-        deck_list: list[str],
-        output_file: Path,
-        faces: Literal["all", "front", "back"],
-        crop_mark_thickness: float,
-        cut_spacing_thickness: float,
-        crop_border: float,
-        background_color: IntegerRGB,
-        paper_size: str | NDArray[Shape["2"], Float32],
-        units: Units,
-        fill_corners: bool,
-        page_safe_margin: float,
-        cache_dir: Path,
-        card_size: NDArray[Shape["2"], Float32] | None
+    deck_list: list[str],
+    output_file: Path,
+    faces: Literal["all", "front", "back"],
+    crop_mark_thickness: float,
+    cut_spacing_thickness: float,
+    crop_border: float,
+    background_color: IntegerRGB,
+    paper_size: str | NDArray[Shape["2"], Float32],
+    units: Units,
+    fill_corners: bool,
+    page_safe_margin: float,
+    cache_dir: Path,
+    card_size: NDArray[Shape["2"], Float32] | None,
 ):
-    """This command generates a PDF document at OUTPUT_FILE with the cards from the files in DECK_LIST
+    """This command generates a PDF document at OUTPUT_FILE with the cards from the files in DECK_LIST.
 
     DECK_LIST is a list of files containing filepaths to decklist files in text/arena format
     or entries in a manastack:{manastack_id} or archidekt:{archidekt_id} format.
@@ -192,10 +198,7 @@ def my_mom(
     else:
         resolved_paper_size = paper_size
 
-    if card_size is None:
-        resolved_card_size = MTG_CARD_SIZE[units]
-    else:
-        resolved_card_size = card_size
+    resolved_card_size = MTG_CARD_SIZE[units] if card_size is None else card_size
 
     # Plot cards
     printer = FPDF2CardAssembler(
@@ -207,7 +210,7 @@ def my_mom(
         border_crop=crop_border,
         background_color=background_color,
         fill_corners=fill_corners,
-        page_safe_margin=page_safe_margin
+        page_safe_margin=page_safe_margin,
     )
 
     printer.assemble(card_image_filepaths=images, output_filepath=output_file)
@@ -215,28 +218,24 @@ def my_mom(
 
 @ur_mom.command(name="image")
 @common_cli_arguments
-@click.option(
-    "--dpi", "-d",
-    type=int, default=300,
-    help="DPI of the output image."
-)
+@click.option("--dpi", "-d", type=int, default=300, help="DPI of the output image.")
 def his_mom(
-        deck_list: list[str],
-        output_file: Path,
-        faces: Literal["all", "front", "back"],
-        crop_mark_thickness: float,
-        cut_spacing_thickness: float,
-        crop_border: float,
-        background_color: IntegerRGB,
-        paper_size: str | NDArray[Shape["2"], Float32],
-        units: Units,
-        fill_corners: bool,
-        page_safe_margin: float,
-        cache_dir: Path,
-        card_size: NDArray[Shape["2"], Float32] | None,
-        dpi: int
+    deck_list: list[str],
+    output_file: Path,
+    faces: Literal["all", "front", "back"],
+    crop_mark_thickness: float,
+    cut_spacing_thickness: float,
+    crop_border: float,
+    background_color: IntegerRGB,
+    paper_size: str | NDArray[Shape["2"], Float32],
+    units: Units,
+    fill_corners: bool,
+    page_safe_margin: float,
+    cache_dir: Path,
+    card_size: NDArray[Shape["2"], Float32] | None,
+    dpi: int,
 ):
-    """This command generates an image file at OUTPUT_FILE with the cards from the files in DECK_LIST
+    """This command generates an image file at OUTPUT_FILE with the cards from the files in DECK_LIST.
 
     DECK_LIST is a list of files containing filepaths to decklist files in text/arena format
     or entries in a manastack:{manastack_id} or archidekt:{archidekt_id} format.
@@ -265,10 +264,7 @@ def his_mom(
     else:
         resolved_paper_size = paper_size
 
-    if card_size is None:
-        resolved_card_size = MTG_CARD_SIZE[units]
-    else:
-        resolved_card_size = card_size
+    resolved_card_size = MTG_CARD_SIZE[units] if card_size is None else card_size
 
     # Plot cards
     printer = MatplotlibCardAssembler(
