@@ -40,7 +40,7 @@ def test_print_cards_fpdf(example_images_24: list[Path], test_outputs_dir: Path)
         border_crop=0,
         crop_marks_thickness=0.5,
         cut_spacing_thickness=0.1,
-        fill_corners=True,
+        filled_corners=True,
         background_color=None,
         page_safe_margin=0,
         units="mm",

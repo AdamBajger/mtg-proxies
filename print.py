@@ -209,7 +209,7 @@ def command_pdf(
         cut_spacing_thickness=cut_spacing_thickness,
         border_crop=crop_border,
         background_color=background_color,
-        fill_corners=fill_corners,
+        filled_corners=fill_corners,
         page_safe_margin=page_safe_margin,
     )
 
