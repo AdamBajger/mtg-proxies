@@ -4,7 +4,8 @@ from pathlib import Path
 import pytest
 
 from mtgproxies import dimensions
-from mtgproxies.print_cards import FPDF2CardAssembler, MatplotlibCardAssembler
+from mtgproxies.plotting.fpdf_plotter import FPDF2CardAssembler
+from mtgproxies.plotting.mpl_plotter import MatplotlibCardAssembler
 
 
 def test_example_images(example_images_7: list[str], example_images_24: list[Path]):
@@ -37,7 +38,7 @@ def test_print_cards_fpdf(example_images_24: list[Path], test_outputs_dir: Path)
     assembler = FPDF2CardAssembler(
         paper_size=dimensions.PAPER_SIZE["A4"]["mm"],
         card_size=dimensions.MTG_CARD_SIZE["mm"],
-        border_crop=5,
+        border_crop=2,
         crop_marks_thickness=0.5,
         cut_spacing_thickness=0.1,
         filled_corners=True,

@@ -10,18 +10,7 @@ from mtgproxies import fetch_scans_scryfall
 from mtgproxies.cli import parse_decklist_spec
 from mtgproxies.decklists import Decklist
 from mtgproxies.dimensions import MTG_CARD_SIZE, PAPER_SIZE, UNITS_TO_MM, Units
-from mtgproxies.print_cards import FPDF2CardAssembler, MatplotlibCardAssembler
 from mtgproxies.scryfall.scryfall import DEFAULT_CACHE_DIR
-
-
-# def papersize(string: str) -> np.ndarray:
-#     spec = string.lower()
-#     if spec == "a4":
-#         return np.array([21, 29.7]) / 2.54
-#     if "x" in spec:
-#         split = spec.split("x")
-#         return np.array([float(split[0]), float(split[1])])
-#     raise argparse.ArgumentTypeError()
 
 
 def click_callback_cardsize(
@@ -183,6 +172,7 @@ def command_pdf(
     images, resolved_card_size, resolved_paper_size = process_dimensions_and_decklist(
         cache_dir, card_size, deck_list, faces, paper_size, units
     )
+    from mtgproxies.plotting.fpdf_plotter import FPDF2CardAssembler
 
     # Plot cards
     printer = FPDF2CardAssembler(
@@ -224,13 +214,16 @@ def command_image(
     DECK_LIST is a list of files containing filepaths to decklist files in text/arena format
     or entries in a manastack:{manastack_id} or archidekt:{archidekt_id} format.
 
-    OUTPUT_FILE is the path to the output image file. The extension of the file determines the format. Only formats
-    supported by matplotlib are allowed.
+    OUTPUT_FILE is the base path to the output image files. The extension of the file determines the format. Only formats
+    supported by matplotlib are allowed. Multiple image files will be created, one for each page (page number will be
+    appended to the filename).
 
     """
     images, resolved_card_size, resolved_paper_size = process_dimensions_and_decklist(
         cache_dir, card_size, deck_list, faces, paper_size, units
     )
+
+    from mtgproxies.plotting.mpl_plotter import MatplotlibCardAssembler
 
     # Plot cards
     printer = MatplotlibCardAssembler(
