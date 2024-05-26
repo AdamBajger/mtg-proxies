@@ -129,6 +129,6 @@ dmypy.json
 .pyre/
 
 # MTG Cache
-.cache_mtg/
+.cache_mtgproxies/
 tests/outputs/
 tests/.test_cache/

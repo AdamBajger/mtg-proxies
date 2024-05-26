@@ -20,8 +20,7 @@ from mtgproxies.scryfall.rate_limit import RateLimiter
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CACHE_DIR = Path(__file__).parent / ".cache" / "mtgproxies" / "scryfall"
-# cache.mkdir(parents=True, exist_ok=True)  # Create cache folder
+DEFAULT_CACHE_DIR = Path(__file__).parent.parent.parent / ".cache_mtgproxies" / "scryfall"
 scryfall_rate_limiter = RateLimiter(delay=0.1)
 _download_lock = threading.Lock()
 
@@ -101,6 +100,9 @@ def depaginate(url: str) -> list[dict]:
 
 def search(q: str) -> list[dict]:
     """Perform Scryfall search.
+
+    Args:
+        q (str): Search query to a ScryFall card search API
 
     Returns:
         list: All matching cards.

@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 # local imports
 from mtgproxies.dimensions import Units, get_pixels_from_size_and_ppsu, get_ppsu_from_size_and_pixels
-from mtgproxies.print_cards import fill_corners
+from mtgproxies.plotting.corner_filling import fill_corners
 
 
 if TYPE_CHECKING:
