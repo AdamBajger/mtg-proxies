@@ -132,3 +132,16 @@ dmypy.json
 .cache_mtgproxies/
 tests/outputs/
 tests/.test_cache/
+
+# ides
+.idea/
+.vscode/
+
+# files
+*.pdf
+*.png
+*.jpg
+*.txt
+
+# backsides and custom art
+!backside/*

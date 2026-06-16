@@ -43,29 +43,6 @@ include = ["mtgproxies", "scryfall"]
 
 
 
-[tool.pdm]
-[tool.pdm.dev-dependencies]
-dev = [
-    "mypy",
-    "pre-commit",
-    "ruff",
-]
-test = [
-    "pytest>=8.2.0",
-    "pytest-cov",
-]
-
-[tool.pdm.scripts]
-l = { composite = ["lint", "format", "mypy"] }
-test = "pytest tests"
-lint = "ruff check ."
-format = "ruff format ."
-mypy = "mypy ."
-post_install = { composite = [
-    "pre-commit install",
-    "pre-commit install --hook-type commit-msg",
-] }
-
 [build-system]
 requires = ["setuptools >= 61.0"]
 build-backend = "setuptools.build_meta"

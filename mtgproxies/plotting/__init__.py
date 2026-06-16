@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import abc
 from logging import getLogger
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 
 # third-party imports
 import PIL
+from PIL import ImageDraw
 from tqdm import tqdm
 
 # local imports
@@ -22,6 +24,8 @@ if TYPE_CHECKING:
 
     from nptyping import Float, NDArray
     from PIL.Image import Image
+
+    from mtgproxies.scans import CardSlot
 
 
 logger = getLogger(__name__)
@@ -43,6 +47,7 @@ class CardAssembler(abc.ABC):
         background_color: tuple[int, int, int] | None = None,
         page_safe_margin: float = 0,
         units: Units = "mm",
+        card_back_image_path: Path | None = None,
     ):
         """Initialize the CardAssembler.
 
@@ -56,6 +61,7 @@ class CardAssembler(abc.ABC):
             background_color: Background color of the paper.
             page_safe_margin: How much to leave as a margin on the paper.
             units: Units to use for the sizes.
+            card_back_image_path: Path to a custom card back image for single-faced cards in duplex mode.
         """
         # self.mm_coeff = UNITS_TO_MM[units]
         self.units = units
@@ -67,6 +73,8 @@ class CardAssembler(abc.ABC):
         self.cut_spacing_thickness = cut_spacing_thickness
         self.background_color = background_color
         self.filled_corners = filled_corners
+        self.card_back_image_path = card_back_image_path
+        self._card_back_cache: Image | None = None
 
         # precompute some values
         self.card_bbox_size = self.card_size - (self.border_crop * 2)
@@ -169,6 +177,148 @@ class CardAssembler(abc.ABC):
             x_right = x_left + self.card_bbox_size[0]
             yield x_left, self.paper_size[1], x_left, 0
             yield x_right, self.paper_size[1], x_right, 0
+
+    # ---------- duplex printing (double-sided) ----------
+
+    #: Long-edge (horizontal) flip – card at ``(r, c)`` on the front page lands at
+    #: ``(r, cols-1-c)`` on the back page.  This is the standard book-like flip.
+    FLIP_HORIZONTAL = "horizontal"
+
+    #: Short-edge (vertical) flip – ``(r, c)`` → ``(rows-1-r, c)``.
+    FLIP_VERTICAL = "vertical"
+
+    def _compute_back_index(self, front_index: int, flip_mode: str) -> int:
+        """Map a flat front-page slot index to the back-page slot index.
+
+        Args:
+            front_index: 0-based index on the front page (left-to-right, top-to-bottom).
+            flip_mode: ``FLIP_HORIZONTAL`` (long-edge) or ``FLIP_VERTICAL`` (short-edge).
+
+        Returns:
+            0-based index on the corresponding back page.
+        """
+        row = front_index // self.cols
+        col = front_index % self.cols
+        if flip_mode == self.FLIP_HORIZONTAL:
+            back_col = self.cols - 1 - col
+            return row * self.cols + back_col
+        elif flip_mode == self.FLIP_VERTICAL:
+            back_row = self.rows - 1 - row
+            return back_row * self.cols + col
+        raise ValueError(f"Unknown flip_mode: {flip_mode}")
+
+    def _get_card_back_image(self, reference_size: tuple[int, int]) -> Image:
+        """Return the card back image for single-faced cards.
+
+        If ``card_back_image_path`` was set, that file is loaded and processed
+        through the same pipeline as regular cards (corner-fill, crop).
+        Otherwise a simple generated card back is used.
+
+        The image is cached after first load for efficiency.
+        """
+        if self.card_back_image_path is not None:
+            if self._card_back_cache is None:
+                self._card_back_cache = self.process_card_image(self.card_back_image_path)
+            return self._card_back_cache
+
+        # Fallback: generate a simple card back
+        img = PIL.Image.new("RGB", reference_size, (32, 32, 32))
+        draw = ImageDraw.Draw(img)
+        bw = max(3, min(reference_size) // 20)
+        draw.rectangle([0, 0, reference_size[0] - 1, reference_size[1] - 1],
+                       outline=(80, 50, 20), width=bw)
+        inner = bw * 2
+        draw.rectangle([inner, inner, reference_size[0] - 1 - inner, reference_size[1] - 1 - inner],
+                       outline=(80, 50, 20), width=max(1, bw // 2))
+        return img
+
+    def _front_page_generator(self, batch: list[CardSlot]) -> list[tuple[Bbox, Image, bool]]:
+        """Build the front-page layout: normal left-to-right, top-to-bottom.
+
+        Returns a list of ``(bbox, image, is_double_faced)`` tuples so the back-page
+        generator knows which slots need the real back image.
+        """
+        result: list[tuple[Bbox, Image, bool]] = []
+        for i, slot in enumerate(batch):
+            card_pos = np.array([i % self.cols, i // self.cols])
+            cut_spacing_offset = self.cut_spacing_thickness * card_pos
+            preceding_cards_offset = self.card_bbox_size * card_pos
+            card_offset = cut_spacing_offset + preceding_cards_offset + self.paper_safe_margin + self.offset
+            image = self.process_card_image(slot.front)
+            result.append(((*card_offset, *self.card_bbox_size), image, slot.is_double_faced))
+        return result
+
+    def _back_page_generator(self, front_layout: list[tuple[Bbox, Image, bool]],
+                              batch: list[CardSlot], flip_mode: str) -> Generator[tuple[Bbox, Image]]:
+        """Generate the back-page layout: mirrored positions for duplex alignment.
+
+        Iterates through the back-page slots in normal left-to-right,
+        top-to-bottom order, placing:
+        - the real back image for double-faced cards
+        - a generic card back for single-faced cards
+
+        The horizontal flip mapping ensures that when the printed sheet is
+        turned over the long edge, each double-faced card's front and back
+        align precisely.
+
+        Only positions that have a corresponding front card are filled; empty
+        ``(bbox, Image)`` pairs are skipped.
+
+        Yields:
+            ``(bbox, image)`` for each card on the back page.
+        """
+        image_size: tuple[int, int] | None = None
+        # Build a sparse map of back-index → image
+        back_map: dict[int, Image] = {}
+        for front_i in range(len(front_layout)):
+            _bbox, _img, is_double = front_layout[front_i]
+            back_i = self._compute_back_index(front_i, flip_mode)
+
+            if image_size is None:
+                dummy = self.process_card_image(batch[0].front)
+                image_size = (dummy.width, dummy.height)
+
+            if is_double and front_i < len(batch):
+                back_map[back_i] = self.process_card_image(batch[front_i].back)
+            else:
+                back_map[back_i] = self._get_card_back_image(image_size)
+
+        # Yield in left-to-right, top-to-bottom grid order
+        for back_i in range(self.rows * self.cols):
+            if back_i not in back_map:
+                continue
+            card_pos = np.array([back_i % self.cols, back_i // self.cols])
+            cut_spacing_offset = self.cut_spacing_thickness * card_pos
+            preceding_cards_offset = self.card_bbox_size * card_pos
+            card_offset = cut_spacing_offset + preceding_cards_offset + self.paper_safe_margin + self.offset
+            yield (*card_offset, *self.card_bbox_size), back_map[back_i]
+
+    def get_duplex_page_pairs(
+        self, card_slots: list[CardSlot], flip_mode: str = FLIP_HORIZONTAL
+    ) -> Generator[tuple[list[tuple[Bbox, Image, bool]], Generator[tuple[Bbox, Image]]]]:
+        """Yield ``(front_layout, back_generator)`` for each pair of pages.
+
+        *front_layout* is a pre-computed list of ``(bbox, image, is_double)``
+        for the front page.  *back_generator* lazily yields ``(bbox, image)``
+        for the corresponding back page.
+
+        The caller is responsible for iterating the back generator to
+        completion on every page-pair (this releases per-page PIL resources).
+
+        Args:
+            card_slots: One :class:`~mtgproxies.scans.CardSlot` per physical card copy.
+            flip_mode: ``FLIP_HORIZONTAL`` (default, long-edge).
+        """
+        per_sheet = self.rows * self.cols
+        remaining = list(card_slots)
+        while remaining:
+            batch = remaining[:per_sheet]
+            remaining = remaining[per_sheet:]
+            front_layout = self._front_page_generator(batch)
+            back_gen = self._back_page_generator(front_layout, batch, flip_mode)
+            yield front_layout, back_gen
+
+    # -------------------------------------------------
 
     def prepare_routine(self, card_image_filepaths, output_filepath):
         total_cards = len(card_image_filepaths)

@@ -61,7 +61,7 @@ def get_file(file_name: str, url: str, cache_dir: Path, silent: bool = False) ->
 
 def download(url: str, dst, chunk_size: int = 1024 * 4, silent: bool = False):
     """Download a file with a tqdm progress bar."""
-    with requests.get(url, stream=True) as req:
+    with requests.get(url, stream=True, headers=SCRYFALL_HEADERS) as req:
         req.raise_for_status()
         file_size = int(req.headers["Content-Length"]) if "Content-Length" in req.headers else None
         with open(dst, "xb") as f, tqdm(
@@ -77,6 +77,9 @@ def download(url: str, dst, chunk_size: int = 1024 * 4, silent: bool = False):
                     pbar.update(chunk_size)
 
 
+SCRYFALL_HEADERS = {"User-Agent": "MTGProxies/1.0", "Accept": "application/json"}
+
+
 def depaginate(url: str) -> list[dict]:
     """Recursively unpack Scryfall search results from multiple pages into a single list.
 
@@ -86,7 +89,7 @@ def depaginate(url: str) -> list[dict]:
         list: Concatenation of all `data` entries.
     """
     with scryfall_rate_limiter:
-        response = requests.get(url).json()
+        response = requests.get(url, headers=SCRYFALL_HEADERS).json()
     assert response["object"]
 
     if "data" not in response:

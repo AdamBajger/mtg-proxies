@@ -35,6 +35,11 @@ class Card:
         """
         return [face["image_uris"] for face in scryfall.get_faces(self.card)]
 
+    @property
+    def is_double_faced(self) -> bool:
+        """Whether this card has two faces (transform, MDFC, etc.)."""
+        return len(self.image_uris) > 1
+
     def __format__(self, format_spec: str) -> str:
         if format_spec == "text":
             return f"{self.count} {self['name']}"

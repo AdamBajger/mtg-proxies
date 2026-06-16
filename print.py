@@ -10,6 +10,7 @@ from mtgproxies import fetch_scans_scryfall
 from mtgproxies.cli import parse_decklist_spec
 from mtgproxies.decklists import Decklist
 from mtgproxies.dimensions import MTG_CARD_SIZE, PAPER_SIZE, UNITS_TO_MM, Units
+from mtgproxies.scans import CardSlot, prepare_card_slots
 from mtgproxies.scryfall.scryfall import DEFAULT_CACHE_DIR
 
 
@@ -141,6 +142,23 @@ def common_cli_arguments(func):
         "Default is 2.5x3.5 inches (or 63.1x88 mm).",
         callback=click_callback_cardsize,
     )(func)
+    func = click.option(
+        "--duplex",
+        "-d",
+        is_flag=True,
+        default=False,
+        help="Enable double-sided (duplex) printing.  "
+        "Aligns double-faced card backs with their fronts for long-edge (book-like) page flipping.  "
+        "Single-faced cards receive a generic card back.",
+    )(func)
+    func = click.option(
+        "--card-back",
+        "-cbk",
+        type=click.Path(path_type=Path, exists=True, dir_okay=False, readable=True),
+        default=None,
+        help="Path to a custom card back image for single-faced cards in duplex mode.  "
+        "If not specified, a generic generated card back is used.",
+    )(func)
     return func
 
 
@@ -160,6 +178,8 @@ def command_pdf(
     page_safe_margin: float,
     cache_dir: Path,
     card_size: NDArray[Shape["2"], Float32] | None,
+    duplex: bool,
+    card_back: Path | None,
 ):
     """This command generates a PDF document at OUTPUT_FILE with the cards from the files in DECK_LIST.
 
@@ -169,9 +189,14 @@ def command_pdf(
     OUTPUT_FILE is the path to the output PDF file.
 
     """
-    images, resolved_card_size, resolved_paper_size = process_dimensions_and_decklist(
-        cache_dir, card_size, deck_list, faces, paper_size, units
-    )
+    if duplex:
+        card_slots, resolved_card_size, resolved_paper_size = process_dimensions_and_decklist_duplex(
+            cache_dir, card_size, deck_list, paper_size, units
+        )
+    else:
+        images, resolved_card_size, resolved_paper_size = process_dimensions_and_decklist(
+            cache_dir, card_size, deck_list, faces, paper_size, units
+        )
     from mtgproxies.plotting.fpdf_plotter import FPDF2CardAssembler
 
     # Plot cards
@@ -185,9 +210,13 @@ def command_pdf(
         background_color=background_color,
         filled_corners=filled_corners,
         page_safe_margin=page_safe_margin,
+        card_back_image_path=card_back,
     )
 
-    printer.assemble(card_image_filepaths=images, output_filepath=output_file)
+    if duplex:
+        printer.assemble_duplex(card_slots=card_slots, output_filepath=output_file)
+    else:
+        printer.assemble(card_image_filepaths=images, output_filepath=output_file)
 
 
 @command_group_print.command(name="image")
@@ -208,6 +237,8 @@ def command_image(
     cache_dir: Path,
     card_size: NDArray[Shape["2"], Float32] | None,
     dpi: int,
+    duplex: bool,
+    card_back: Path | None,
 ):
     """This command generates an image file at OUTPUT_FILE with the cards from the files in DECK_LIST.
 
@@ -219,14 +250,21 @@ def command_image(
     appended to the filename).
 
     """
-    images, resolved_card_size, resolved_paper_size = process_dimensions_and_decklist(
-        cache_dir, card_size, deck_list, faces, paper_size, units
-    )
+    if duplex:
+        card_slots, resolved_card_size, resolved_paper_size = process_dimensions_and_decklist_duplex(
+            cache_dir, card_size, deck_list, paper_size, units
+        )
+        images = None  # not used in duplex mode
+    else:
+        images, resolved_card_size, resolved_paper_size = process_dimensions_and_decklist(
+            cache_dir, card_size, deck_list, faces, paper_size, units
+        )
 
     from mtgproxies.plotting.mpl_plotter import MatplotlibCardAssembler
 
     # Plot cards
     printer = MatplotlibCardAssembler(
+        dpi=dpi,
         units=units,
         paper_size=resolved_paper_size,
         card_size=resolved_card_size,
@@ -236,10 +274,13 @@ def command_image(
         background_color=background_color,
         filled_corners=filled_corners,
         page_safe_margin=page_safe_margin,
-        dpi=dpi,
+        card_back_image_path=card_back,
     )
 
-    printer.assemble(card_image_filepaths=images, output_filepath=output_file)
+    if duplex:
+        printer.assemble_duplex(card_slots=card_slots, output_filepath=output_file)
+    else:
+        printer.assemble(card_image_filepaths=images, output_filepath=output_file)
 
 
 def process_dimensions_and_decklist(cache_dir, card_size, deck_list, faces, paper_size, units):
@@ -259,6 +300,24 @@ def process_dimensions_and_decklist(cache_dir, card_size, deck_list, faces, pape
         resolved_paper_size = paper_size
     resolved_card_size = MTG_CARD_SIZE[units] if card_size is None else card_size
     return images, resolved_card_size, resolved_paper_size
+
+
+def process_dimensions_and_decklist_duplex(cache_dir, card_size, deck_list, paper_size, units):
+    """Same as :func:`process_dimensions_and_decklist` but returns :class:`CardSlot`\ s for duplex printing."""
+    parsed_deck_list = Decklist()
+    for deck in deck_list:
+        parsed_deck_list.extend(parse_decklist_spec(deck, cache_dir=cache_dir))
+    card_slots = prepare_card_slots(decklist=parsed_deck_list, cache_dir=cache_dir)
+
+    if isinstance(paper_size, str):
+        if units in PAPER_SIZE[paper_size]:
+            resolved_paper_size = PAPER_SIZE[paper_size][units]
+        else:
+            resolved_paper_size = PAPER_SIZE[paper_size]["mm"] / UNITS_TO_MM[units]
+    else:
+        resolved_paper_size = paper_size
+    resolved_card_size = MTG_CARD_SIZE[units] if card_size is None else card_size
+    return card_slots, resolved_card_size, resolved_paper_size
 
 
 if __name__ == "__main__":
